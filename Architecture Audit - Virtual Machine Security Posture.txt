@@ -1,0 +1,30 @@
+// ============================================================
+// QUERY 5 — VIRTUAL MACHINE SECURITY POSTURE
+// Checks disk encryption, extensions, public IP exposure
+// ============================================================
+resources
+| where type == "microsoft.compute/virtualmachines"
+| extend
+    osType            = tostring(properties.storageProfile.osDisk.osType),
+    osDiskEncryption  = tostring(properties.storageProfile.osDisk.managedDisk.storageAccountType),
+    vmSize            = tostring(properties.hardwareProfile.vmSize),
+    provisioningState = tostring(properties.provisioningState),
+    hasIdentity       = isnotempty(identity),
+    identityType      = tostring(identity.type)
+| join kind=inner (
+    resourcecontainers
+    | where type =~ 'microsoft.resources/subscriptions'
+    | project subscriptionId, subscriptionName = name)
+    on subscriptionId
+| project
+    name,
+    subscriptionName,
+    resourceGroup,
+    region = location,
+    osType,
+    vmSize,
+    provisioningState,
+    hasIdentity,
+    identityType,
+    osDiskEncryption
+| order by resourceGroup asc

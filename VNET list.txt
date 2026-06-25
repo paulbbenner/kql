@@ -1,0 +1,13 @@
+resources
+| where type =~ 'microsoft.network/virtualnetworks'
+| join kind=inner (
+    resourcecontainers
+    | where type == 'microsoft.resources/subscriptions'
+    | project subscriptionId, subscriptionName = name)
+    on subscriptionId
+| extend addressSpaces = strcat_array(properties['addressSpace']['addressPrefixes'], ', ')
+| extend subnetCount = array_length(properties['subnets'])
+| project subscriptionName, location, name, resourceGroup, addressSpaces, subnetCount, tags
+| order by name asc, subscriptionName asc
+
+

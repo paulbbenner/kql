@@ -1,0 +1,53 @@
+resources
+| where type == 'microsoft.compute/virtualmachines'
+| join kind=inner (
+    resourcecontainers
+    | where type == 'microsoft.resources/subscriptions'
+    | project subscriptionId, subscriptionName = name)
+    on subscriptionId
+| extend dataDisks = properties.storageProfile.dataDisks
+| mv-expand dataDisk = dataDisks
+| extend 
+     dataDiskSizeGB = toint(dataDisk.diskSizeGB)
+     , TagsObject = parse_json(tags)
+| extend OwnerTag = tostring(TagsObject.Owner)
+     , OwnerEmailTag = tostring(TagsObject.['Owner Email'])
+     , CreatedByTag = tostring(TagsObject.['Created By'])
+     , ProductFamilyTag = tostring(TagsObject.['Product Family'])
+     , SystemTag = tostring(TagsObject.System)
+     , SubSystemTag = tostring(TagsObject.Subsystem)    
+     , tags = ['tags'] 
+| summarize 
+     DiskCount = count()
+     , TotalDataDiskSizeGB = sum(dataDiskSizeGB) by id, name, tostring(dataDisk.managedDisk.storageAccountType)
+     , StorageAccountType = tostring(dataDisk.managedDisk.storageAccountType)
+     , Subscription = subscriptionName
+     , Region = location
+     , OwnerTag
+     , OwnerEmailTag
+     , CreatedByTag
+     , ProductFamilyTag
+     , SystemTag
+     , SubSystemTag 
+     , Tags = tostring(tags)
+     , VMState = tostring(properties['extended']['instanceView']['powerState']['displayStatus'])
+     , VMOS = tostring(properties['extended']['instanceView']['osName'])
+| project Subscription
+     , Region
+     , VMname = name
+     , VMOS
+     , VMState
+     , DiskCount
+     , TotalDataDiskSizeGB 
+     , StorageAccountType
+     , OwnerTag
+     , OwnerEmailTag
+     , CreatedByTag
+     , ProductFamilyTag
+     , SystemTag
+     , SubSystemTag 
+     , Tags
+| order by Subscription asc
+     , Region asc
+     , VMname asc																										
+

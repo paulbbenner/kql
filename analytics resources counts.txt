@@ -1,0 +1,19 @@
+// All_Resource_Count_by_Type
+// Generate Count of all Resources by Type
+// focusing on the "Analytics" family of resources.
+// Query will return only those resources we have in our environment and omit the rest.
+// Click the "Run query" command above to execute the query and see results.
+
+resources
+| summarize count() by tostring(type)
+| where type == "informatica.datamanagement/organizations"
+or type == "microsoft.analysisservices/servers"
+or type == "microsoft.databricks/workspaces"
+or type == "microsoft.datalakeanalytics/accounts"
+or type == "microsoft.datashare/accounts"
+or type == "microsoft.experimentation/experimentworkspaces"
+or type == "microsoft.hdinsight/clusterpools/clusters"
+or type == "microsoft.hdinsight/clusters"
+or type == "microsoft.powerbidedicated/capacities"
+or type == "microsoft.streamanalytics/clusters"
+or type == "microsoft.synapse/privatelinkhubs"

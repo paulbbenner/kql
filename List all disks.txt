@@ -1,0 +1,27 @@
+Resources
+| where type == 'microsoft.compute/disks'
+| extend Computername = tostring(split(managedBy, "/")[-1])
+| extend diskSizeGB = toint(properties.diskSizeGB)
+| extend diskSKU = properties.tier
+| extend diskState = properties.diskState
+| extend diskIOPS = properties.diskIOPSReadWrite
+| extend diskMBps = properties.diskMBpsReadWrite
+| extend lastUpdate = properties.LastOwnershipUpdateTime
+| extend Group = tags.Group
+| extend ProductFamily = tags.["Product Family"]
+| extend System = tags.System
+| extend Subsystem = tags.Subsystem
+| join kind=leftouter (ResourceContainers 
+    | where type == 'microsoft.resources/subscriptions' 
+    | project subscriptionId, subscriptionName = name) on subscriptionId
+| project name, Computername, subscriptionName, resourceGroup, location, sku.name, diskSKU, diskSizeGB, diskIOPS, diskMBps, diskState, lastUpdate, Group, ProductFamily, System, Subsystem,
+    tag_Environment = tags.Environment,
+    tag_Owner = tags.Owner,
+    tag_Techops = tags.Techops,
+    tag_ProductFamily = tags["Product Family"],
+    tag_Group = tags.Group,
+    tag_Function = tags.Function,
+    tag_Role = tags.Role,
+    tag_Shutdown = tags.Shutdown,
+    tag_Client = tags.Client
+| order by diskSizeGB desc

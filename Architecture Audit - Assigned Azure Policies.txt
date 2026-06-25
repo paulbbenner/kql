@@ -1,0 +1,42 @@
+PolicyResources
+| where type == "microsoft.authorization/policyassignments"
+| extend
+    assignmentId = id,
+    assignmentName = name,
+    assignmentDisplayName = tostring(properties.displayName),
+    assignmentScope = tostring(properties.scope),
+    enforcementMode = tostring(properties.enforcementMode),
+    policyDefinitionId = tostring(properties.policyDefinitionId),
+    subscriptionId = subscriptionId
+| join kind=leftouter (
+    PolicyResources
+    | where type in (
+        "microsoft.authorization/policydefinitions",
+        "microsoft.authorization/policysetdefinitions"
+    )
+    | project
+        policyDefinitionId = id,
+        definitionDisplayName = tostring(properties.displayName),
+        definitionType = case(
+            type == "microsoft.authorization/policydefinitions", "Policy",
+            type == "microsoft.authorization/policysetdefinitions", "Initiative",
+            "Unknown"
+        )
+) on policyDefinitionId
+| join kind=leftouter  (
+    resourcecontainers
+    | where type =~ 'microsoft.resources/subscriptions'
+    | project subscriptionId, subscriptionName = name, subscriptionState = tostring(properties.state))
+    on subscriptionId
+| project
+    subscriptionName,
+    subscriptionState,
+    assignmentName,
+    assignmentDisplayName,
+    assignmentScope,
+    enforcementMode,
+    definitionDisplayName,
+    definitionType,
+    policyDefinitionId
+| where subscriptionState != 'Disabled'
+| order by assignmentScope asc

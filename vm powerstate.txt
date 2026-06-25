@@ -1,0 +1,12 @@
+resources
+| where type == 'microsoft.compute/virtualmachines'
+| join kind=leftouter(
+    resourcecontainers 
+    | where type=='microsoft.resources/subscriptions' 
+    | project subscriptionName=name, subscriptionId
+) on subscriptionId
+| summarize count() by subscriptionName, tostring(properties.extended.instanceView.powerState.code)
+
+
+
+

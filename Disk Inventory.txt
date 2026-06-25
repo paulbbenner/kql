@@ -1,0 +1,91 @@
+resources
+| where type =~ "microsoft.compute/disks"
+| where name !contains 'osdisk' 
+| extend diskState = tostring(properties.diskState)
+     , storageType = tostring(sku.name)
+     , tier = tostring(properties.tier)
+     , diskTier = properties.diskSku.tier
+     , diskSizeGB = todouble(properties.diskSizeGB)
+     , diskSizeGiB = todouble(properties.diskSizeGB) / 1.074
+     , osType = tostring(properties.osType)
+| extend pathParts = parse_path(managedBy)
+| extend OwnerVM = tostring(pathParts.Filename)
+| extend TagsObject = parse_json(tags)
+| extend OwnerTag = tostring(TagsObject.Owner)
+     , OwnerEmailTag = tostring(TagsObject.['Owner Email'])
+     , CreatedByTag = tostring(TagsObject.['Created By'])
+     , ProductFamilyTag = tostring(TagsObject.['Product Family'])
+     , SystemTag = tostring(TagsObject.System)
+     , SubSystemTag = tostring(TagsObject.Subsystem)
+| extend diskTier = case(storageType =~ 'StandardSSD_LRS' and diskSizeGiB < 8,     'E1',
+                         storageType =~ 'StandardSSD_LRS' and diskSizeGiB < 16,    'E2',
+                         storageType =~ 'StandardSSD_LRS' and diskSizeGiB < 32,    'E3',
+                         storageType =~ 'StandardSSD_LRS' and diskSizeGiB < 64,    'E4',
+                         storageType =~ 'StandardSSD_LRS' and diskSizeGiB < 128,   'E6',
+                         storageType =~ 'StandardSSD_LRS' and diskSizeGiB < 256,   'E10',
+                         storageType =~ 'StandardSSD_LRS' and diskSizeGiB < 512,   'E15',
+                         storageType =~ 'StandardSSD_LRS' and diskSizeGiB < 1024,  'E20',
+                         storageType =~ 'StandardSSD_LRS' and diskSizeGiB < 2048,  'E30',
+                         storageType =~ 'StandardSSD_LRS' and diskSizeGiB < 4096,  'E40',
+                         storageType =~ 'StandardSSD_LRS' and diskSizeGiB < 8192,  'E50',
+                         storageType =~ 'StandardSSD_LRS' and diskSizeGiB < 16384, 'E60',
+                         storageType =~ 'StandardSSD_LRS' and diskSizeGiB < 32768, 'E70',
+                         storageType =~ 'StandardSSD_LRS', 'E80',
+                         storageType =~ 'Standard_LRS' and diskSizeGiB < 64,    'S4',
+                         storageType =~ 'Standard_LRS' and diskSizeGiB < 128,   'S6',
+                         storageType =~ 'Standard_LRS' and diskSizeGiB < 256,   'S10',
+                         storageType =~ 'Standard_LRS' and diskSizeGiB < 512,   'S15',
+                         storageType =~ 'Standard_LRS' and diskSizeGiB < 1024,  'S20',
+                         storageType =~ 'Standard_LRS' and diskSizeGiB < 2048,  'S30',
+                         storageType =~ 'Standard_LRS' and diskSizeGiB < 4096,  'S40',
+                         storageType =~ 'Standard_LRS' and diskSizeGiB < 8192,  'S50',
+                         storageType =~ 'Standard_LRS' and diskSizeGiB < 16384, 'S60',
+                         storageType =~ 'Standard_LRS' and diskSizeGiB < 32768, 'S70',
+                         storageType =~ 'Standard_LRS', 'S80',
+                         storageType =~ 'Premium_LRS' and diskSizeGiB < 8,     'P1',
+                         storageType =~ 'Premium_LRS' and diskSizeGiB < 16,    'P2',
+                         storageType =~ 'Premium_LRS' and diskSizeGiB < 32,    'P3',
+                         storageType =~ 'Premium_LRS' and diskSizeGiB < 64,    'P4',
+                         storageType =~ 'Premium_LRS' and diskSizeGiB < 128,   'P6',
+                         storageType =~ 'Premium_LRS' and diskSizeGiB < 256,   'P10',
+                         storageType =~ 'Premium_LRS' and diskSizeGiB < 512,   'P15',
+                         storageType =~ 'Premium_LRS' and diskSizeGiB < 1024,  'P20',
+                         storageType =~ 'Premium_LRS' and diskSizeGiB < 2048,  'P30',
+                         storageType =~ 'Premium_LRS' and diskSizeGiB < 4096,  'P40',
+                         storageType =~ 'Premium_LRS' and diskSizeGiB < 8192,  'P50',
+                         storageType =~ 'Premium_LRS' and diskSizeGiB < 16384, 'P60',
+                         storageType =~ 'Premium_LRS' and diskSizeGiB < 32768, 'P70',
+                         storageType =~ 'Premium_LRS', 'P80',
+                         '')   
+| join kind=inner (
+    resourcecontainers
+    | where type =~ 'microsoft.resources/subscriptions'
+    | project subscriptionId, subscriptionName = name)
+    on subscriptionId
+| project subscriptionName
+     , region = location
+     , diskState
+     , storageType
+     , pricingTier = coalesce(tier, diskTier)
+     , diskSizeGB
+     , diskSizeGiB
+     , resourceGroup
+     , OwnerVM
+     , osType
+     , name
+     , OwnerTag
+     , OwnerEmailTag
+     , CreatedByTag
+     , ProductFamilyTag
+     , SystemTag
+     , SubSystemTag 
+     , ['tags']
+| order by subscriptionName asc
+     , region asc
+     , diskState asc
+     , storageType asc
+     , pricingTier
+     , diskSizeGB asc
+     , resourceGroup asc
+     , OwnerVM asc
+     , name asc

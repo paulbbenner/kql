@@ -1,0 +1,9 @@
+resources
+| where type =~ 'microsoft.network/loadBalancers'
+| join kind=inner (
+    resourcecontainers
+    | where type == 'microsoft.resources/subscriptions'
+    | project subscriptionId, subscriptionName = name)
+    on subscriptionId
+| summarize count() by subscriptionName, type, sku=tostring(sku.name)
+| order by sku asc, subscriptionName

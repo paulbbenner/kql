@@ -1,0 +1,38 @@
+// ============================================================
+// QUERY 13 — AKS CLUSTER SECURITY POSTURE
+// Checks RBAC, private cluster, network policy, AAD integration
+// ============================================================
+resources
+| where type == "microsoft.containerservice/managedclusters"
+| extend
+    kubernetesVersion  = tostring(properties.kubernetesVersion),
+    rbacEnabled        = tobool(properties.enableRBAC),
+    privateCluster     = tobool(properties.apiServerAccessProfile.enablePrivateCluster),
+    networkPlugin      = tostring(properties.networkProfile.networkPlugin),
+    networkPolicy      = tostring(properties.networkProfile.networkPolicy),
+    aadEnabled         = tobool(properties.aadProfile.managed),
+    provisioningState  = tostring(properties.provisioningState)
+| join kind=inner (
+    resourcecontainers
+    | where type =~ 'microsoft.resources/subscriptions'
+    | project subscriptionId, subscriptionName = name)
+    on subscriptionId
+| project
+    name,
+    subscriptionName,
+    resourceGroup,
+    region = location,
+    kubernetesVersion,
+    rbacEnabled,
+    privateCluster,
+    networkPlugin,
+    networkPolicy,
+    aadEnabled,
+    provisioningState,
+    riskFlags = strcat(
+        iff(rbacEnabled == false, "NO-RBAC ", ""),
+        iff(privateCluster == false, "PUBLIC-API ", ""),
+        iff(aadEnabled == false, "NO-AAD ", ""),
+        iff(isempty(networkPolicy), "NO-NETPOL ", "")
+    )
+| order by riskFlags desc

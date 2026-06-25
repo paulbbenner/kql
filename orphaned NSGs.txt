@@ -1,0 +1,14 @@
+// Show unassociated network security groups
+// This query returns Network Security Groups (NSGs) that aren't associated to a network interface or subnet.
+// Click the "Run query" command above to execute the query and see results.
+resources
+| where type =~ 'microsoft.network/networksecuritygroups' and isnull(properties.networkInterfaces) and isnull(properties.subnets)
+| join kind=inner (
+    resourcecontainers
+    | where type == 'microsoft.resources/subscriptions'
+    | project subscriptionId, subscriptionName = name)
+    on subscriptionId
+| project subscriptionName, name, resourceGroup, ['tags']
+| sort by name asc
+| order by ['subscriptionName'], name asc
+

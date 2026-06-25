@@ -1,0 +1,55 @@
+
+PolicyResources
+| where type =~ 'microsoft.authorization/policydefinitions'
+| project
+    category = tostring(properties.metadata.category),
+    displayName = tostring(properties.displayName),
+    name,
+    description = tostring(properties.description),
+    policyType = tostring(properties.policyType),
+    policyRule = properties.policyRule,
+    parameters = properties.parameters
+| where (displayName contains "defender" and  displayName contains "sql")
+   or (description contains "defender" and description contains "sql")
+| order by category asc, displayName asc
+
+
+
+
+policyresources
+| where type =~ 'microsoft.authorization/policydefinitions'
+| extend resourceType = tostring(properties['metadata']['resourceType'])
+| extend effect = iif(tostring(properties['policyRule']['then']['effect']) == "[parameters('effect')]", "", tostring(properties['policyRule']['then']['effect']))
+| extend allowedEffect = coalesce(properties['parameters']['effect']['allowedValues'], "")
+| project
+    category = tostring(properties.metadata.category),
+    displayName = tostring(properties.displayName),
+    name,
+    description = tostring(properties.description),
+    effect, 
+    allowedEffect,
+    policyType = tostring(properties.policyType),
+    policyRule = properties.policyRule,
+    parameters = properties.parameters
+| where (displayName contains "defender" and  displayName contains "sql")//
+   or (description contains "defender" and description contains "sql")//
+| order by category asc, displayName asc
+
+
+policyresources
+| where type =~ 'microsoft.authorization/policydefinitions'
+| extend effect = iif(tostring(properties['policyRule']['then']['effect']) == "[parameters('effect')]", "", tostring(properties['policyRule']['then']['effect']))
+| extend allowedEffect = coalesce(properties['parameters']['effect']['allowedValues'], "")
+| project
+    category = tostring(properties.metadata.category),
+    displayName = tostring(properties.displayName),
+    name,
+    description = tostring(properties.description),
+    effect, 
+    allowedEffect,
+    policyType = tostring(properties.policyType),
+    policyRule = properties.policyRule,
+    parameters = properties.parameters
+| where (displayName contains "defender" and  displayName contains "sql")//
+   or (description contains "defender" and description contains "sql")//
+| order by category asc, displayName asc

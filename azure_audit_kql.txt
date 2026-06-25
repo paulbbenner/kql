@@ -1,0 +1,417 @@
+// ============================================================
+// AZURE PLATFORM ARCHITECTURE AUDIT — MASTER KQL QUERY SET
+// Purpose: Standards audit across all critical resource domains
+// Run in: Azure Resource Graph Explorer (resources table)
+// Scope:  All subscriptions in tenant (remove filter to narrow)
+// ============================================================
+
+
+// ============================================================
+// QUERY 1 — FULL INVENTORY WITH CONTEXT (replaces base query)
+// Returns every resource with subscription, RG, region, tags
+// ============================================================
+resources
+| project
+    type,
+    name,
+    resourceGroup,
+    subscriptionId,
+    location,
+    tags,
+    properties
+| extend
+    hasOwnerTag     = isnotempty(tostring(tags.Owner)),
+    hasEnvTag       = isnotempty(tostring(tags.Environment)),
+    hasCostCenterTag = isnotempty(tostring(tags.CostCenter)),
+    isTagged        = isnotempty(tags)
+| summarize
+    resourceCount   = count(),
+    untaggedCount   = countif(isTagged == false),
+    noOwnerCount    = countif(hasOwnerTag == false),
+    noEnvCount      = countif(hasEnvTag == false)
+    by type
+| order by resourceCount desc
+
+
+// ============================================================
+// QUERY 2 — TAGGING COMPLIANCE (governance gap finder)
+// Finds resources missing required tags by type and RG
+// ============================================================
+resources
+| extend
+    hasOwner      = isnotempty(tostring(tags.Owner)),
+    hasEnv        = isnotempty(tostring(tags.Environment)),
+    hasCostCenter = isnotempty(tostring(tags.CostCenter))
+| where hasOwner == false or hasEnv == false or hasCostCenter == false
+| project
+    type,
+    name,
+    resourceGroup,
+    subscriptionId,
+    location,
+    missingOwner      = iff(hasOwner == false, "YES", ""),
+    missingEnv        = iff(hasEnv == false, "YES", ""),
+    missingCostCenter = iff(hasCostCenter == false, "YES", "")
+| order by type asc
+
+
+// ============================================================
+// QUERY 3 — PUBLIC IP EXPOSURE AUDIT
+// Finds all public IPs and their associated resources
+// ============================================================
+resources
+| where type == "microsoft.network/publicipaddresses"
+| extend
+    allocationMethod = tostring(properties.publicIPAllocationMethod),
+    ipAddress        = tostring(properties.ipAddress),
+    associatedTo     = tostring(properties.ipConfiguration.id),
+    ddosProtection   = tostring(properties.ddosSettings.protectionMode)
+| project
+    name,
+    resourceGroup,
+    subscriptionId,
+    location,
+    allocationMethod,
+    ipAddress,
+    associatedTo,
+    ddosProtection,
+    isUnassociated = isempty(associatedTo)
+| order by isUnassociated desc
+
+
+// ============================================================
+// QUERY 4 — STORAGE ACCOUNT SECURITY POSTURE
+// Checks encryption, public access, HTTPS-only, network rules
+// ============================================================
+resources
+| where type == "microsoft.storage/storageaccounts"
+| extend
+    httpsOnly          = tobool(properties.supportsHttpsTrafficOnly),
+    publicBlobAccess   = tobool(properties.allowBlobPublicAccess),
+    minTlsVersion      = tostring(properties.minimumTlsVersion),
+    networkDefaultAction = tostring(properties.networkAcls.defaultAction),
+    allowSharedKeyAccess = tobool(properties.allowSharedKeyAccess),
+    infrastructureEncryption = tobool(properties.encryption.requireInfrastructureEncryption),
+    kind               = tostring(kind),
+    skuName            = tostring(sku.name)
+| project
+    name,
+    resourceGroup,
+    subscriptionId,
+    location,
+    httpsOnly,
+    publicBlobAccess,
+    minTlsVersion,
+    networkDefaultAction,
+    allowSharedKeyAccess,
+    infrastructureEncryption,
+    kind,
+    skuName,
+    isPubliclyAccessible = (publicBlobAccess == true or networkDefaultAction == "Allow")
+| order by isPubliclyAccessible desc
+
+
+// ============================================================
+// QUERY 5 — VIRTUAL MACHINE SECURITY POSTURE
+// Checks disk encryption, extensions, public IP exposure
+// ============================================================
+resources
+| where type == "microsoft.compute/virtualmachines"
+| extend
+    osType            = tostring(properties.storageProfile.osDisk.osType),
+    osDiskEncryption  = tostring(properties.storageProfile.osDisk.managedDisk.storageAccountType),
+    vmSize            = tostring(properties.hardwareProfile.vmSize),
+    provisioningState = tostring(properties.provisioningState),
+    hasIdentity       = isnotempty(identity),
+    identityType      = tostring(identity.type)
+| project
+    name,
+    resourceGroup,
+    subscriptionId,
+    location,
+    osType,
+    vmSize,
+    provisioningState,
+    hasIdentity,
+    identityType,
+    osDiskEncryption
+| order by resourceGroup asc
+
+
+// ============================================================
+// QUERY 6 — NSG AUDIT: OPEN INBOUND RULES
+// Finds NSGs allowing unrestricted inbound (0.0.0.0/0)
+// ============================================================
+resources
+| where type == "microsoft.network/networksecuritygroups"
+| mv-expand rule = properties.securityRules
+| extend
+    ruleName        = tostring(rule.name),
+    direction       = tostring(rule.properties.direction),
+    access          = tostring(rule.properties.access),
+    sourcePrefix    = tostring(rule.properties.sourceAddressPrefix),
+    destPortRange   = tostring(rule.properties.destinationPortRange),
+    priority        = toint(rule.properties.priority)
+| where direction == "Inbound"
+    and access == "Allow"
+    and (sourcePrefix == "*" or sourcePrefix == "0.0.0.0/0" or sourcePrefix == "Internet")
+| project
+    nsgName = name,
+    resourceGroup,
+    subscriptionId,
+    location,
+    ruleName,
+    destPortRange,
+    sourcePrefix,
+    priority
+| order by priority asc
+
+
+// ============================================================
+// QUERY 7 — KEY VAULT AUDIT
+// Checks soft delete, purge protection, network access, RBAC
+// ============================================================
+resources
+| where type == "microsoft.keyvault/vaults"
+| extend
+    softDeleteEnabled   = tobool(properties.enableSoftDelete),
+    purgeProtection     = tobool(properties.enablePurgeProtection),
+    networkDefaultAction = tostring(properties.networkAcls.defaultAction),
+    enabledForDiskEncryption = tobool(properties.enabledForDiskEncryption),
+    rbacAuthorization   = tobool(properties.enableRbacAuthorization),
+    skuName             = tostring(properties.sku.name)
+| project
+    name,
+    resourceGroup,
+    subscriptionId,
+    location,
+    softDeleteEnabled,
+    purgeProtection,
+    networkDefaultAction,
+    enabledForDiskEncryption,
+    rbacAuthorization,
+    skuName,
+    isPublic = (networkDefaultAction == "Allow")
+| order by isPublic desc
+
+
+// ============================================================
+// QUERY 8 — SQL SERVER SECURITY AUDIT
+// Checks TDE, Azure AD admin, public network access, auditing
+// ============================================================
+resources
+| where type == "microsoft.sql/servers"
+| extend
+    publicNetworkAccess   = tostring(properties.publicNetworkAccess),
+    minTlsVersion         = tostring(properties.minimalTlsVersion),
+    adminLogin            = tostring(properties.administratorLogin),
+    version               = tostring(properties.version),
+    restrictOutboundAccess = tobool(properties.restrictOutboundNetworkAccess)
+| project
+    name,
+    resourceGroup,
+    subscriptionId,
+    location,
+    publicNetworkAccess,
+    minTlsVersion,
+    adminLogin,
+    version,
+    restrictOutboundAccess,
+    isPublic = (publicNetworkAccess == "Enabled")
+| order by isPublic desc
+
+
+// ============================================================
+// QUERY 9 — DIAGNOSTIC SETTINGS COVERAGE GAP
+// Finds high-value resources WITHOUT diagnostic settings
+// This is the "negative space" audit — silence = blind spot
+// ============================================================
+resources
+| where type in (
+    "microsoft.keyvault/vaults",
+    "microsoft.storage/storageaccounts",
+    "microsoft.sql/servers",
+    "microsoft.network/networksecuritygroups",
+    "microsoft.network/applicationgateways",
+    "microsoft.apimanagement/service",
+    "microsoft.web/sites",
+    "microsoft.containerservice/managedclusters",
+    "microsoft.network/virtualnetworkgateways",
+    "microsoft.eventhub/namespaces",
+    "microsoft.servicebus/namespaces",
+    "microsoft.cognitiveservices/accounts",
+    "microsoft.automation/automationaccounts",
+    "microsoft.datafactory/factories",
+    "microsoft.databricks/workspaces"
+    )
+| extend resourceId = tolower(id)
+| join kind=leftouter (
+    resources
+    | where type == "microsoft.insights/diagnosticsettings"
+    | extend parentId = tolower(tostring(properties.targetResourceId))
+    | summarize hasDiagnostics = true by parentId
+) on $left.resourceId == $right.parentId
+| where hasDiagnostics != true
+| project
+    type,
+    name,
+    resourceGroup,
+    subscriptionId,
+    location,
+    finding = "NO DIAGNOSTIC SETTINGS — audit trail blind spot"
+| order by type asc
+
+
+// ============================================================
+// QUERY 10 — RESOURCE LOCK COVERAGE
+// Finds critical resources without CanNotDelete or ReadOnly locks
+// ============================================================
+resourcecontainers
+| where type == "microsoft.resources/subscriptions/resourcegroups"
+| extend rgId = tolower(id)
+| join kind=leftouter (
+    resources
+    | where type == "microsoft.authorization/locks"
+    | extend parentRg = tolower(tostring(properties.parentResourceType))
+    | summarize hasLock = true, lockLevel = tostring(max(properties.level)) by resourceGroup, subscriptionId
+) on resourceGroup, subscriptionId
+| where hasLock != true
+| project
+    resourceGroup = name,
+    subscriptionId,
+    location,
+    finding = "NO RESOURCE LOCK on resource group"
+| order by resourceGroup asc
+
+
+// ============================================================
+// QUERY 11 — ORPHANED RESOURCE AUDIT (cost + security risk)
+// Finds unattached disks, NICs, PIPs, and old snapshots
+// ============================================================
+resources
+| where (
+    // Unattached managed disks
+    (type == "microsoft.compute/disks"
+        and tostring(properties.diskState) == "Unattached")
+    or
+    // Unattached NICs
+    (type == "microsoft.network/networkinterfaces"
+        and isempty(tostring(properties.virtualMachine.id)))
+    or
+    // Unassociated Public IPs
+    (type == "microsoft.network/publicipaddresses"
+        and isempty(tostring(properties.ipConfiguration.id)))
+    or
+    // Snapshots older than 90 days (approximation)
+    (type == "microsoft.compute/snapshots")
+)
+| project
+    type,
+    name,
+    resourceGroup,
+    subscriptionId,
+    location,
+    diskState   = tostring(properties.diskState),
+    timeCreated = tostring(properties.timeCreated),
+    tags
+| order by type asc
+
+
+// ============================================================
+// QUERY 12 — AUTOMATION ACCOUNT RUNBOOK AUDIT (lateral movement)
+// Checks identity type on automation accounts — high risk pivot
+// ============================================================
+resources
+| where type == "microsoft.automation/automationaccounts"
+| extend
+    identityType     = tostring(identity.type),
+    hasSystemIdentity = (identity.type contains "SystemAssigned"),
+    skuName          = tostring(properties.sku.name),
+    state            = tostring(properties.state),
+    publicNetworkAccess = tostring(properties.publicNetworkAccess)
+| project
+    name,
+    resourceGroup,
+    subscriptionId,
+    location,
+    identityType,
+    hasSystemIdentity,
+    skuName,
+    state,
+    publicNetworkAccess,
+    risk = iff(publicNetworkAccess == "Enabled" and hasSystemIdentity == true,
+               "HIGH — public + system identity", "Review")
+| order by risk asc
+
+
+// ============================================================
+// QUERY 13 — AKS CLUSTER SECURITY POSTURE
+// Checks RBAC, private cluster, network policy, AAD integration
+// ============================================================
+resources
+| where type == "microsoft.containerservice/managedclusters"
+| extend
+    kubernetesVersion  = tostring(properties.kubernetesVersion),
+    rbacEnabled        = tobool(properties.enableRBAC),
+    privateCluster     = tobool(properties.apiServerAccessProfile.enablePrivateCluster),
+    networkPlugin      = tostring(properties.networkProfile.networkPlugin),
+    networkPolicy      = tostring(properties.networkProfile.networkPolicy),
+    aadEnabled         = tobool(properties.aadProfile.managed),
+    provisioningState  = tostring(properties.provisioningState)
+| project
+    name,
+    resourceGroup,
+    subscriptionId,
+    location,
+    kubernetesVersion,
+    rbacEnabled,
+    privateCluster,
+    networkPlugin,
+    networkPolicy,
+    aadEnabled,
+    provisioningState,
+    riskFlags = strcat(
+        iff(rbacEnabled == false, "NO-RBAC ", ""),
+        iff(privateCluster == false, "PUBLIC-API ", ""),
+        iff(aadEnabled == false, "NO-AAD ", ""),
+        iff(isempty(networkPolicy), "NO-NETPOL ", "")
+    )
+| order by riskFlags desc
+
+
+// ============================================================
+// QUERY 14 — MISSING DEFENDER FOR CLOUD COVERAGE CHECK
+// Queries security pricing tiers across resource types
+// Run in securityresources table (not resources)
+// ============================================================
+securityresources
+| where type == "microsoft.security/pricings"
+| extend
+    pricingTier = tostring(properties.pricingTier),
+    subPlan     = tostring(properties.subPlan),
+    name        = tostring(name)
+| project
+    name,
+    pricingTier,
+    subPlan,
+    subscriptionId,
+    isFree = (pricingTier == "Free")
+| order by isFree desc
+
+
+// ============================================================
+// QUERY 15 — DATA SHARE EXTERNAL RECIPIENT AUDIT
+// Data Share = data leaving your tenant — needs governance
+// ============================================================
+resources
+| where type == "microsoft.datashare/accounts"
+| extend
+    provisioningState = tostring(properties.provisioningState)
+| project
+    name,
+    resourceGroup,
+    subscriptionId,
+    location,
+    provisioningState,
+    tags,
+    finding = "Review external share recipients and data sets"

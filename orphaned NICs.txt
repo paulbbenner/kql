@@ -1,0 +1,11 @@
+resources
+| where type =~ 'microsoft.network/networkinterfaces'
+| join kind=inner (
+    resourcecontainers
+    | where type == 'microsoft.resources/subscriptions'
+    | project subscriptionId, subscriptionName = name)
+    on subscriptionId
+| where properties['privateEndpoint'] == ""
+| where properties['virtualMachine'] == ""
+| project subscriptionName, name, resourceGroup, ['tags']
+

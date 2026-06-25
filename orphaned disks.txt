@@ -1,0 +1,14 @@
+
+// Click the "Run query" command above to execute the query and see results.
+resources
+| where type =~ "microsoft.compute/disks"
+| extend diskState = tostring(properties.diskState)
+| where managedBy == "" 
+or diskState =~ 'Unattached' and  diskState != 'ActiveSAS'
+| join kind=inner (
+    resourcecontainers
+    | where type == 'microsoft.resources/subscriptions'
+    | project subscriptionId, subscriptionName = name)
+    on subscriptionId
+| project subscriptionName, name, diskState, resourceGroup, region = location, ['tags']
+| order by subscriptionName, ['diskState'], name asc

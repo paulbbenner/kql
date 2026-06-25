@@ -1,0 +1,17 @@
+// All_Resource_Count_by_Type
+// Generate Count of all Resources by Type
+// focusing on the "Containers" family of resources.
+// Query will return only those resources we have in our environment and omit the rest.
+// Click the "Run query" command above to execute the query and see results.
+
+resources
+| summarize count() by tostring(type)
+| where type == "microsoft.app/jobs"
+or type == "microsoft.containerinstance/containergroups"
+or type == "microsoft.containerregistry/registries"
+or type == "microsoft.containerservice/fleets"
+or type == "microsoft.containerservice/managedclusters"
+or type == "microsoft.redhatopenshift/openshiftclusters"
+or type == "microsoft.servicefabric/clusters"
+or type == "microsoft.servicefabric/managedclusters"
+or type == "microsoft.servicefabric/managedclusters"

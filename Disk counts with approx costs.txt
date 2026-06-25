@@ -1,0 +1,25 @@
+resources
+| join kind=inner (
+    resourcecontainers
+    | where type == 'microsoft.resources/subscriptions'
+    | project subscriptionId, subscriptionName = name)
+    on subscriptionId
+| where type == "microsoft.compute/disks"
+//| where properties['diskState'] != "Reserved".  // filering out osDisks -> turn on to remove, turn off to add back
+| extend skuName = tostring(sku.name)
+| where skuName  != "StandardSSD_LRS"
+| where skuName  != "Standard_LRS"
+| where subscriptionName  == "TPS - Development" or subscriptionName == "TPS - Test"
+| extend cost = case (tostring(properties['tier']) == "P30", 135,
+                        tostring(properties['tier']) == "P10", 19,
+                        tostring(properties['tier']) == "P15", 38,
+                        tostring(properties['tier']) == "P40", 259,
+                        tostring(properties['tier']) == "P50", 495,
+                        tostring(properties['tier']) == "P60", 946,
+                        tostring(properties['tier']) == "P70", 1802,
+                        tostring(properties['tier']) == "P80", 3604,
+                        1)
+| summarize diskCount= count() by subscriptionName, skuName, tier=tostring(properties['tier']), cost
+//| order by subscriptionName, skuName, tier, cost
+| project  subscriptionName, skuName, tier, diskCount,  monthCost = diskCount * cost,  yearCost = diskCount * cost * 12
+| order by subscriptionName asc, yearCost desc, diskCount

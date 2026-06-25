@@ -1,0 +1,33 @@
+// All_Resource_Count_by_Type
+// Generate Count of all Resources by Type
+// focusing on the "Compute" family of resources.
+// Query will return only those resources we have in our environment and omit the rest.
+// Click the "Run query" command above to execute the query and see results.
+
+resources
+| summarize count() by tostring(type)
+| where type == "microsoft.compute/locations/communitygalleries/images"
+or  type == "microsoft.app/managedenvironments"
+or  type == "microsoft.avs/privateclouds"
+or  type == "microsoft.azurefleet/fleets"
+or  type == "microsoft.baremetalinfrastructure/baremetalinstances"
+or  type == "microsoft.batch/batchaccounts"
+or  type == "microsoft.cloudtest/hostedpools"
+or  type == "microsoft.compute/availabilitysets"
+or  type == "microsoft.compute/cloudservices"
+or  type == "microsoft.compute/galleries"
+or  type == "microsoft.compute/galleries/applications"
+or  type == "microsoft.compute/galleries/applications/versions"
+or  type == "microsoft.compute/galleries/images"
+or  type == "microsoft.compute/galleries/images/versions"
+or  type == "microsoft.compute/hostgroups"
+or  type == "microsoft.compute/images"
+or  type == "microsoft.compute/proximityplacementgroups"
+or  type == "microsoft.compute/restorepointcollections"
+or  type == "microsoft.compute/sshpublickeys"
+or  type == "microsoft.compute/virtualmachines"
+or  type == "microsoft.compute/virtualmachinescalesets"
+or  type == "microsoft.hanaonazure/hanainstances"
+or  type == "microsoft.labservices/labaccounts"
+or  type == "microsoft.quantum/workspaces"
+or  type == "microsoft.virtualmachineimages/imagetemplates"

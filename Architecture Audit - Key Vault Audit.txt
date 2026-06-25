@@ -1,0 +1,31 @@
+// ============================================================
+// QUERY 7 — KEY VAULT AUDIT
+// Checks soft delete, purge protection, network access, RBAC
+// ============================================================
+resources
+| where type == "microsoft.keyvault/vaults"
+| extend
+    softDeleteEnabled   = tobool(properties.enableSoftDelete),
+    purgeProtection     = tobool(properties.enablePurgeProtection),
+    networkDefaultAction = tostring(properties.networkAcls.defaultAction),
+    enabledForDiskEncryption = tobool(properties.enabledForDiskEncryption),
+    rbacAuthorization   = tobool(properties.enableRbacAuthorization),
+    skuName             = tostring(properties.sku.name)
+| join kind=inner (
+    resourcecontainers
+    | where type =~ 'microsoft.resources/subscriptions'
+    | project subscriptionId, subscriptionName = name)
+    on subscriptionId
+| project
+    name,
+    subscriptionName,
+    resourceGroup,
+    region = location,
+    softDeleteEnabled,
+    purgeProtection,
+    networkDefaultAction,
+    enabledForDiskEncryption,
+    rbacAuthorization,
+    skuName,
+    isPublic = (networkDefaultAction == "Allow")
+| order by isPublic desc

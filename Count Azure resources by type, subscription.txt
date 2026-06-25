@@ -1,0 +1,11 @@
+// Count Azure resources
+// Returns number of Azure resources that exist in the subscriptions that you have access to.
+// Click the "Run query" command above to execute the query and see results.
+resources
+| join kind=inner (
+    resourcecontainers
+    | where type == 'microsoft.resources/subscriptions'
+    | project subscriptionId, subscriptionName = name)
+    on subscriptionId
+| summarize count() by ['type'], subscriptionName
+| order by ['type'] asc, subscriptionName asc 

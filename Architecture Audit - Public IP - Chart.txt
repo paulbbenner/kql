@@ -1,0 +1,28 @@
+// ============================================================
+// QUERY 3 — PUBLIC IP EXPOSURE AUDIT - Chartable
+// Finds all public IPs and their associated resources
+// ============================================================
+resources
+| where type == "microsoft.network/publicipaddresses"
+| extend
+    allocationMethod = tostring(properties.publicIPAllocationMethod),
+    ipAddress        = tostring(properties.ipAddress),
+    associatedTo     = tostring(properties.ipConfiguration.id),
+    ddosProtection   = tostring(properties.ddosSettings.protectionMode)
+| join kind=inner (
+    resourcecontainers
+    | where type =~ 'microsoft.resources/subscriptions'
+    | project subscriptionId, subscriptionName = name)
+    on subscriptionId
+| project
+    name,
+    subscriptionName,
+    resourceGroup,
+    region = location,
+    allocationMethod,
+    ipAddress,
+    associatedTo,
+    ddosProtection,
+    isUnassociated = isempty(associatedTo),
+    isAssociated = iif(isempty(associatedTo), "Not associated", "Associated")
+| summarize Association = count() by isAssociated

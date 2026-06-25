@@ -1,0 +1,6 @@
+Resources
+| where type == "microsoft.compute/disks"
+| join kind=leftouter (ResourceContainers | where type == "microsoft.resources/subscriptions" | project subscriptionId, subscriptionName = name) on subscriptionId
+| project subscriptionId, subscriptionName, name, location, skuName = tostring(sku.name), properties.diskSizeGB, properties.diskState
+| summarize count() by subscriptionId, subscriptionName, skuName
+| order by subscriptionName asc, skuName asc

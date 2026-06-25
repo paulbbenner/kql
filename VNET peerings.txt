@@ -1,0 +1,45 @@
+resources
+| where type =~ 'microsoft.network/virtualNetworks'
+| join kind=inner (
+    resourcecontainers
+    | where type == 'microsoft.resources/subscriptions'
+    | project subscriptionId, subscriptionName = name)
+    on subscriptionId
+| mv-expand peering=properties.virtualNetworkPeerings
+| where notempty(peering)
+| project subscriptionName
+     , vnetName = name
+     , peeringName=tostring(peering.name)
+     , vnetId = id
+     , peeredVnetId=tostring(peering.properties.remoteVirtualNetwork.id)
+     , peeringState = tostring(peering.properties.peeringState)
+     , allowVirtualNetworkAccess = tostring(peering.properties.allowVirtualNetworkAccess)
+     , allowForwardedTraffic = tostring(peering.properties.allowForwardedTraffic)
+     , allowGatewayTransit = tostring(peering.properties.allowGatewayTransit)
+     , useRemoteGateways = tostring(peering.properties.useRemoteGateways)
+| join kind=leftouter (
+     resources
+     | where type =~ 'microsoft.network/virtualNetworks'
+     | project peeredVnetId = id
+         , peeredVnetName = name
+         , peeredVnetSubscriptionId = subscriptionId
+    ) on $left.peeredVnetId == $right.peeredVnetId
+| join kind=leftouter (
+    resourcecontainers
+    | where type == 'microsoft.resources/subscriptions'
+    | project subscriptionId, peeredSubscriptionName = name)
+    on $left.peeredVnetSubscriptionId == $right.subscriptionId
+|extend nullifPeeredVnetName = parse_path(peeredVnetId) 
+|project subscriptionName
+    , vnetName
+    , peeringName
+    , peeredVnetName = coalesce(peeredVnetName, nullifPeeredVnetName.Filename)
+    , peeringState
+    , peeredSubscriptionName
+    , allowVirtualNetworkAccess
+    , allowForwardedTraffic
+    , allowGatewayTransit
+    , useRemoteGateways
+| order by subscriptionName asc, vnetName asc, peeredVnetName asc
+
+

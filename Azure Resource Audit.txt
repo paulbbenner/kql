@@ -1,0 +1,36 @@
+resources
+| join kind=inner (
+    resourcecontainers
+    | where type == 'microsoft.resources/subscriptions'
+    | project subscriptionId, subscriptionName = name
+) on subscriptionId
+| where type != "microsoft.compute/virtualmachines/extensions" and type != "microsoft.hybridcompute/machines/extensions"
+| extend category = case(
+    type contains "container", "Container",
+    type startswith "microsoft.compute/", "Compute",
+    type startswith "microsoft.network/", "Network",
+    type startswith "microsoft.storage/", "Storage",
+    type startswith "microsoft.web/", "Web",
+    "Other"
+)
+| extend subscriptionCategory = case(
+    subscriptionName contains "Development", "Non Client Facing",
+    subscriptionName contains "Test", "Non Client Facing",
+    subscriptionName contains "UAT", "Non Client Facing",
+    subscriptionName contains "Perf", "Non Client Facing",
+    subscriptionName contains "Stage", "Non Client Facing",
+    subscriptionName contains "-Dev", "Non Client Facing",
+    subscriptionName contains "-Stage", "Non Client Facing",
+    subscriptionName contains "-UAT", "Non Client Facing",
+    subscriptionName contains "-Perf", "Non Client Facing",
+    subscriptionName contains "Production", "Client Facing",
+    subscriptionName contains "-Prod", "Client Facing",
+    subscriptionName contains "BCPDR", "Client Facing",
+    subscriptionName contains "Management", "Client Facing",
+    subscriptionName contains "Shared", "Client Facing",
+    subscriptionName in ("<Production_Subscription_Name_3>", "<Production_Subscription_Name_6>"), "Client Facing",
+    "Unknown"
+)
+| summarize count() by subscriptionCategory, subscriptionName, category, type
+| project subscriptionCategory, subscriptionName, category, type, count_
+| order by count_ desc

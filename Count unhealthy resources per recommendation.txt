@@ -1,0 +1,32 @@
+// Count Unhealthy Resources Per Recommendation
+// Returns count of healthy, unhealthy and not applicable resources per recommendation.
+// 
+// Use 'summarize' and 'count' to define how to group and aggregate the values by property.
+// 
+// Click the "Run query" command above to execute the query and see results.
+securityresources
+| where type == 'microsoft.security/assessments'
+| join kind=inner (
+    resourcecontainers
+    | where type == 'microsoft.resources/subscriptions'
+    | project subscriptionId, subscriptionName = name)
+    on subscriptionId
+| extend resourceId=id,
+    recommendationId=name,
+    resourceType=type,
+    recommendationName=properties.displayName,
+    source=properties.resourceDetails.Source,
+    recommendationState=properties.status.code,
+    description=properties.metadata.description,
+    assessmentType=properties.metadata.assessmentType,
+    remediationDescription=properties.metadata.remediationDescription,
+    policyDefinitionId=properties.metadata.policyDefinitionId,
+    implementationEffort=properties.metadata.implementationEffort,
+    recommendationSeverity=properties.metadata.severity,
+    category=properties.metadata.categories,
+    userImpact=properties.metadata.userImpact,
+    threats=properties.metadata.threats,
+    portalLink=properties.links.azurePortal
+| summarize numberOfResources=count(resourceId) by tostring(subscriptionName), tostring(recommendationName), tostring(recommendationState)
+| where recommendationState == 'Unhealthy'
+| order by ['recommendationName'], subscriptionName asc

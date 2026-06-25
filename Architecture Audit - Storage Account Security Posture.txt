@@ -1,0 +1,34 @@
+// ============================================================
+// QUERY 4 — STORAGE ACCOUNT SECURITY POSTURE
+// Checks encryption, public access, HTTPS-only, network rules
+// ============================================================
+resources
+| where type == "microsoft.storage/storageaccounts"
+| extend
+    httpsOnly          = tobool(properties.supportsHttpsTrafficOnly),
+    publicBlobAccess   = tobool(properties.allowBlobPublicAccess),
+    minTlsVersion      = tostring(properties.minimumTlsVersion),
+    networkDefaultAction = tostring(properties.networkAcls.defaultAction),
+    allowSharedKeyAccess = tobool(properties.allowSharedKeyAccess),
+    infrastructureEncryption = tobool(properties.encryption.requireInfrastructureEncryption),
+    skuName            = tostring(sku.name)
+| join kind=inner (
+    resourcecontainers
+    | where type =~ 'microsoft.resources/subscriptions'
+    | project subscriptionId, subscriptionName = name)
+    on subscriptionId
+| project
+    name,
+    subscriptionName,
+    resourceGroup,
+    region = location,
+    httpsOnly,
+    publicBlobAccess,
+    minTlsVersion,
+    networkDefaultAction,
+    allowSharedKeyAccess,
+    infrastructureEncryption,
+    skuName,
+    isPubliclyAccessible = (publicBlobAccess == true or networkDefaultAction == "Allow")
+| order by isPubliclyAccessible desc
+
