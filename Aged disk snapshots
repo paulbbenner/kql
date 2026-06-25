@@ -1,0 +1,11 @@
+Resources
+| where type =~ 'Microsoft.Compute/snapshots'
+| extend TimeCreated = properties.timeCreated
+| where TimeCreated < now(-30d)
+| join kind=inner (
+    resourcecontainers
+    | where type == 'microsoft.resources/subscriptions'
+    | project subscriptionId, subscriptionName = name)
+    on subscriptionId
+| project subscriptionName,name, AgeDays=datetime_diff('day', now(), todatetime(TimeCreated)), ['tags']
+| order by AgeDays desc, name
