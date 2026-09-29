@@ -1,0 +1,25 @@
+resources
+| where type =~ 'microsoft.network/bastionhosts'
+| extend
+    vnetId = tostring(properties.ipConfigurations[0].properties.subnet.id),
+    publicIpId = tostring(properties.ipConfigurations[0].properties.publicIPAddress.id),
+    scaleUnits = tostring(properties.scaleUnits),
+    dnsName = tostring(properties.dnsName)
+| join kind=leftouter (
+     resourcecontainers
+     | where type =~ 'microsoft.resources/subscriptions'
+     | project subscriptionId, subscriptionName = name
+     ) on subscriptionId
+| project
+    bastionName = name,
+    subscriptionName,
+    subscriptionId,
+    resourceGroup,    
+    location,
+    sku = tostring(sku.name),
+    scaleUnits,
+    dnsName,
+    vnetId,
+    publicIpId,
+    id
+| order by bastionName
